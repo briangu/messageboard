@@ -185,8 +185,9 @@ public class MessageBoardResource
 
       statement.executeUpdate(
           String.format(
-              "update jobs set result = %s where session_id = %s and session_sub_key = %s and job_id = %s",
+              "update jobs set result = %s, last_access_time = %l where session_id = %s and session_sub_key = %s and id = %i",
               result,
+              new Date().getTime(),
               sessionId,
               sessionSubKey,
               jobId));
