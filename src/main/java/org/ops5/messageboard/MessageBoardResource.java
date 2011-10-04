@@ -39,58 +39,58 @@ public class MessageBoardResource
     }
   }
 
-  private class JobList
-  {
-    public String sessionId;
-
-    public List<Job> Jobs = new ArrayList<Job>();
-  }
-
   private class Job
   {
     public String SessionId;
+    public String SessionSubKey;
     public String JobId;
     public String Status;
     public Date LastAccessTime;
     public String Data;
     public String Result;
+
+    public JSONObject toJSON()
+        throws JSONException
+    {
+      JSONObject jsonJob = new JSONObject();
+      jsonJob.put("SessionId", SessionId);
+      jsonJob.put("SessionSubKey", SessionSubKey);
+      jsonJob.put("JobId", JobId);
+      jsonJob.put("Status", Status);
+      jsonJob.put("LastAccessTime", LastAccessTime.getTime());
+      jsonJob.put("Data", Data);
+      jsonJob.put("Result", Result);
+      return jsonJob;
+    }
+
+    public String toString()
+    {
+      try
+      {
+        return toJSON().toString(2);
+      }
+      catch (JSONException e)
+      {
+        e.printStackTrace();
+      }
+
+      return "{ failed to parse }";
+    }
   }
 
   @GET
   @Produces("text/javascript")
   @Path("/jobs/next")
-  public String getNextJobAsJson(@QueryParam("session") String sessionId)
+  public String getNextJobAsJson(@QueryParam("SessionId") String sessionId)
   {
-    try
-    {
-      Job job = getNextJob(sessionId);
-
-      if (job == null)
-      {
-        return "[]";
-      }
-
-      JSONObject jsonJob = new JSONObject();
-      jsonJob.put("id", job.JobId);
-      jsonJob.put("status", job.Status);
-      jsonJob.put("lastAccessTime", job.LastAccessTime.getTime());
-      jsonJob.put("data", job.Data);
-      jsonJob.put("result", job.Result);
-
-      return jsonJob.toString(2);
-    }
-    catch (JSONException e)
-    {
-      e.printStackTrace();
-    }
-
-    return "[]";
+    Job job = getNextJob(sessionId);
+    return job == null ? "[]" : job.toString();
   }
 
   @GET
   @Produces("text/javascript")
   @Path("/jobs")
-  public String getJobListAsJson(@QueryParam("session") String sessionId)
+  public String getJobListAsJson(@QueryParam("SessionId") String sessionId)
   {
     try
     {
@@ -100,14 +100,7 @@ public class MessageBoardResource
 
       for (Job job : jobList)
       {
-        JSONObject jsonJob = new JSONObject();
-        jsonJob.put("id", job.JobId);
-        jsonJob.put("status", job.Status);
-        jsonJob.put("lastAccessTime", job.LastAccessTime.getTime());
-        jsonJob.put("data", job.Data);
-        jsonJob.put("result", job.Result);
-
-        array.put(jsonJob);
+        array.put(job.toJSON());
       }
 
       return array.toString(2);
@@ -124,9 +117,10 @@ public class MessageBoardResource
   @Produces("text/javascript")
   @Path("/jobs")
   public String putJobResult(
-      @QueryParam("session") String sessionId,
-      @FormParam("id") String id,
-      @FormParam("result") String result
+      @FormParam("SessionId") String sessionId,
+      @FormParam("SessionSubKey") String sessionSubKey,
+      @FormParam("JobId") String jobId,
+      @FormParam("Result") String result
       )
   {
     try
@@ -153,8 +147,8 @@ public class MessageBoardResource
   @Produces("text/javascript")
   @Path("/jobs")
   public String postJobList(
-      @FormParam("session") String sessionId,
-      @FormParam("jobs") String jobsRaw)
+      @FormParam("SessionId") String sessionId,
+      @FormParam("JobList") String jobsRaw)
   {
     try
     {
@@ -217,7 +211,37 @@ public class MessageBoardResource
   @DELETE
   @Produces("text/javascript")
   @Path("/sessions")
-  public String deleteJobList(@FormParam("session") String sessionId)
+  public String deleteJobList(
+      @QueryParam("SessionId") String sessionId
+      )
+  {
+    try
+    {
+      Class.forName("org.h2.Driver");
+      Connection conn = DriverManager.getConnection("jdbc:h2:./test", "sa", "");
+
+      conn.close();
+
+      return "{\"success\": true}";
+    }
+    catch (ClassNotFoundException e)
+    {
+      e.printStackTrace();
+    }
+    catch (SQLException e)
+    {
+      e.printStackTrace();
+    }
+    return "{\"success\": false}";
+  }
+
+  @DELETE
+  @Produces("text/javascript")
+  @Path("/jobs")
+  public String deleteJobList(
+      @QueryParam("SessionId") String sessionId,
+      @QueryParam("SessionSubKey") String sessionSubKey
+      )
   {
     try
     {
