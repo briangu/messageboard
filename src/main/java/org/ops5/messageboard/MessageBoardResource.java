@@ -3,6 +3,7 @@ package org.ops5.messageboard;
 
 import java.util.ArrayList;
 import java.util.List;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.FormParam;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -24,30 +25,31 @@ public class MessageBoardResource
     {
       Class.forName("org.h2.Driver");
       Connection conn = DriverManager.getConnection("jdbc:h2:./test", "sa", "");
-      // create db tables if not present
+      ResultSet resultSet = conn.getMetaData().getTables(conn.getCatalog(), null, null, null);
+
       conn.close();
     }
     catch (ClassNotFoundException e)
     {
-      e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+      e.printStackTrace();
     }
     catch (SQLException e)
     {
-      e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
+      e.printStackTrace();
     }
   }
 
   private class JobList
   {
     public String sessionId;
-    public String key;
 
     public List<Job> Jobs = new ArrayList<Job>();
   }
 
   private class Job
   {
-    public String Id;
+    public String SessionId;
+    public String JobId;
     public String Status;
     public Date LastAccessTime;
     public String Data;
@@ -56,22 +58,50 @@ public class MessageBoardResource
 
   @GET
   @Produces("text/javascript")
-  @Path("/jobs")
-  public String getJobListAsJson(
-      @QueryParam("session") String sessionId,
-      @QueryParam("key") String key
-      )
+  @Path("/jobs/next")
+  public String getNextJobAsJson(@QueryParam("session") String sessionId)
   {
     try
     {
-      JobList jobList = getJobList(sessionId, key);
+      Job job = getNextJob(sessionId);
+
+      if (job == null)
+      {
+        return "[]";
+      }
+
+      JSONObject jsonJob = new JSONObject();
+      jsonJob.put("id", job.JobId);
+      jsonJob.put("status", job.Status);
+      jsonJob.put("lastAccessTime", job.LastAccessTime.getTime());
+      jsonJob.put("data", job.Data);
+      jsonJob.put("result", job.Result);
+
+      return jsonJob.toString(2);
+    }
+    catch (JSONException e)
+    {
+      e.printStackTrace();
+    }
+
+    return "[]";
+  }
+
+  @GET
+  @Produces("text/javascript")
+  @Path("/jobs")
+  public String getJobListAsJson(@QueryParam("session") String sessionId)
+  {
+    try
+    {
+      List<Job> jobList = getJobList(sessionId);
 
       JSONArray array = new JSONArray();
 
-      for (Job job : jobList.Jobs)
+      for (Job job : jobList)
       {
         JSONObject jsonJob = new JSONObject();
-        jsonJob.put("id", job.Id);
+        jsonJob.put("id", job.JobId);
         jsonJob.put("status", job.Status);
         jsonJob.put("lastAccessTime", job.LastAccessTime.getTime());
         jsonJob.put("data", job.Data);
@@ -87,7 +117,7 @@ public class MessageBoardResource
       e.printStackTrace();
     }
 
-    return "{success: false}";
+    return "[]";
   }
 
   @PUT
@@ -95,7 +125,6 @@ public class MessageBoardResource
   @Path("/jobs")
   public String putJobResult(
       @QueryParam("session") String sessionId,
-      @QueryParam("key") String key,
       @FormParam("id") String id,
       @FormParam("result") String result
       )
@@ -125,12 +154,11 @@ public class MessageBoardResource
   @Path("/jobs")
   public String postJobList(
       @FormParam("session") String sessionId,
-      @FormParam("key") String key,
       @FormParam("jobs") String jobsRaw)
   {
     try
     {
-      JSONObject jobs = new JSONObject(jobsRaw);
+      JSONArray jobList = new JSONArray(jobsRaw);
 
       Class.forName("org.h2.Driver");
       Connection conn = DriverManager.getConnection("jdbc:h2:./test", "sa", "");
@@ -154,12 +182,93 @@ public class MessageBoardResource
     return "{\"success\": false}";
   }
 
-  private JobList getJobList(String sessionId, String key)
+  @GET
+  @Produces("text/javascript")
+  @Path("/sessions")
+  public String getSessionList()
   {
-    JobList jobList = new JobList();
+    try
+    {
+      JSONArray sessionList = new JSONArray();
 
-    jobList.sessionId = sessionId;
-    jobList.key = key;
+      Class.forName("org.h2.Driver");
+      Connection conn = DriverManager.getConnection("jdbc:h2:./test", "sa", "");
+
+      conn.close();
+
+      return sessionList.toString(2);
+    }
+    catch (ClassNotFoundException e)
+    {
+      e.printStackTrace();
+    }
+    catch (SQLException e)
+    {
+      e.printStackTrace();
+    }
+    catch (JSONException e)
+    {
+      e.printStackTrace();
+    }
+
+    return "[]";
+  }
+
+  @DELETE
+  @Produces("text/javascript")
+  @Path("/sessions")
+  public String deleteJobList(@FormParam("session") String sessionId)
+  {
+    try
+    {
+      Class.forName("org.h2.Driver");
+      Connection conn = DriverManager.getConnection("jdbc:h2:./test", "sa", "");
+
+      conn.close();
+
+      return "{\"success\": true}";
+    }
+    catch (ClassNotFoundException e)
+    {
+      e.printStackTrace();
+    }
+    catch (SQLException e)
+    {
+      e.printStackTrace();
+    }
+    return "{\"success\": false}";
+  }
+
+  private Job getNextJob(String sessionId)
+  {
+    try
+    {
+      Job job = new Job();
+
+      Class.forName("org.h2.Driver");
+      Connection conn = DriverManager.getConnection("jdbc:h2:./test", "sa", "");
+
+      //
+
+      conn.close();
+
+      return job;
+    }
+    catch (ClassNotFoundException e)
+    {
+      e.printStackTrace();
+    }
+    catch (SQLException e)
+    {
+      e.printStackTrace();
+    }
+
+    return null;
+  }
+
+  private List<Job> getJobList(String sessionId)
+  {
+    List<Job> jobList = new ArrayList<Job>();
 
     try
     {
