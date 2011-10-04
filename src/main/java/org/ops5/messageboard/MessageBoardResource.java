@@ -1,8 +1,8 @@
 package org.ops5.messageboard;
 
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.Date;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.FormParam;
 import javax.ws.rs.GET;
@@ -20,14 +20,16 @@ import org.json.JSONObject;
 @Path("/mb/")
 public class MessageBoardResource
 {
+  private static final String _connectionString = "jdbc:h2:./test";
+
   static {
+    Connection conn = null;
+    Statement statement = null;
+
     try
     {
-      Class.forName("org.h2.Driver");
-      Connection conn = DriverManager.getConnection("jdbc:h2:./test", "sa", "");
+      conn = getConnection();
       ResultSet resultSet = conn.getMetaData().getTables(conn.getCatalog(), null, null, null);
-
-      conn.close();
     }
     catch (ClassNotFoundException e)
     {
@@ -37,15 +39,40 @@ public class MessageBoardResource
     {
       e.printStackTrace();
     }
+    finally
+    {
+      if (statement != null)
+      {
+        try
+        {
+          statement.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+      if (conn != null)
+      {
+        try
+        {
+          conn.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+    }
   }
 
-  private class Job
+  private static class Job
   {
     public String SessionId;
     public String SessionSubKey;
-    public String JobId;
+    public Integer JobId;
     public String Status;
-    public Date LastAccessTime;
+    public Long LastAccessTime;
     public String Data;
     public String Result;
 
@@ -57,7 +84,7 @@ public class MessageBoardResource
       jsonJob.put("SessionSubKey", SessionSubKey);
       jsonJob.put("JobId", JobId);
       jsonJob.put("Status", Status);
-      jsonJob.put("LastAccessTime", LastAccessTime.getTime());
+      jsonJob.put("LastAccessTime", LastAccessTime);
       jsonJob.put("Data", Data);
       jsonJob.put("Result", Result);
       return jsonJob;
@@ -76,6 +103,30 @@ public class MessageBoardResource
 
       return "{ failed to parse }";
     }
+
+    public static Job createFrom(JSONObject jsonObject)
+        throws JSONException
+    {
+      Job job = new Job();
+
+      job.SessionId = jsonObject.getString("SessionId");
+      job.SessionSubKey = jsonObject.getString("SessionSubKey");
+      job.JobId = jsonObject.has("JobId") ? jsonObject.getInt("JobId") : -1;
+      job.Status = jsonObject.getString("Status");
+      job.LastAccessTime = jsonObject.has("LastAccessTime") ? jsonObject.getLong("LastAccessTime") : new Date().getTime();
+      job.Data = jsonObject.getString("Data");
+      job.Result = jsonObject.has("Result") ? jsonObject.getString("Result") : null;
+
+      return job;
+    }
+  }
+
+  private static Connection getConnection()
+      throws ClassNotFoundException, SQLException
+  {
+    Class.forName("org.h2.Driver");
+    Connection conn = DriverManager.getConnection(_connectionString, "sa", "");
+    return conn;
   }
 
   @GET
@@ -123,12 +174,22 @@ public class MessageBoardResource
       @FormParam("Result") String result
       )
   {
+    Connection conn = null;
+    Statement statement = null;
+
     try
     {
-      Class.forName("org.h2.Driver");
-      Connection conn = DriverManager.getConnection("jdbc:h2:./test", "sa", "");
+      conn = getConnection();
 
-      conn.close();
+      statement = conn.createStatement();
+
+      statement.executeUpdate(
+          String.format(
+              "update jobs set result = %s where session_id = %s and session_sub_key = %s and job_id = %s",
+              result,
+              sessionId,
+              sessionSubKey,
+              jobId));
 
       return "{\"success\": true}";
     }
@@ -140,24 +201,66 @@ public class MessageBoardResource
     {
       e.printStackTrace();
     }
+    finally
+    {
+      if (statement != null)
+      {
+        try
+        {
+          statement.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+      if (conn != null)
+      {
+        try
+        {
+          conn.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+    }
+
     return "{\"success\": false}";
   }
 
   @POST
   @Produces("text/javascript")
   @Path("/jobs")
-  public String postJobList(
-      @FormParam("SessionId") String sessionId,
-      @FormParam("JobList") String jobsRaw)
+  public String postJobList(@FormParam("JobList") String jobsRaw)
   {
+    Connection conn = null;
+    Statement statement = null;
+
     try
     {
+      conn = getConnection();
+      statement = conn.createStatement();
+
       JSONArray jobList = new JSONArray(jobsRaw);
 
-      Class.forName("org.h2.Driver");
-      Connection conn = DriverManager.getConnection("jdbc:h2:./test", "sa", "");
+      for (int i = 0; i < jobList.length(); i++)
+      {
+        Job job = Job.createFrom(jobList.getJSONObject(i));
 
-      conn.close();
+        statement.addBatch(
+            String.format(
+                "insert into jobs values (%s, %s, %s, %l, %s, %s)",
+                job.SessionId,
+                job.SessionSubKey,
+                job.Status,
+                job.LastAccessTime,
+                job.Data,
+                job.Result));
+      }
+
+      statement.executeBatch();
 
       return "{\"success\": true}";
     }
@@ -173,6 +276,32 @@ public class MessageBoardResource
     {
       e.printStackTrace();
     }
+    finally
+    {
+      if (statement != null)
+      {
+        try
+        {
+          statement.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+      if (conn != null)
+      {
+        try
+        {
+          conn.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+    }
+
     return "{\"success\": false}";
   }
 
@@ -181,14 +310,14 @@ public class MessageBoardResource
   @Path("/sessions")
   public String getSessionList()
   {
+    Connection conn = null;
+    Statement statement = null;
+
     try
     {
       JSONArray sessionList = new JSONArray();
 
-      Class.forName("org.h2.Driver");
-      Connection conn = DriverManager.getConnection("jdbc:h2:./test", "sa", "");
-
-      conn.close();
+      conn = getConnection();
 
       return sessionList.toString(2);
     }
@@ -204,6 +333,31 @@ public class MessageBoardResource
     {
       e.printStackTrace();
     }
+    finally
+    {
+      if (statement != null)
+      {
+        try
+        {
+          statement.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+      if (conn != null)
+      {
+        try
+        {
+          conn.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+    }
 
     return "[]";
   }
@@ -215,12 +369,12 @@ public class MessageBoardResource
       @QueryParam("SessionId") String sessionId
       )
   {
+    Connection conn = null;
+    Statement statement = null;
+
     try
     {
-      Class.forName("org.h2.Driver");
-      Connection conn = DriverManager.getConnection("jdbc:h2:./test", "sa", "");
-
-      conn.close();
+      conn = getConnection();
 
       return "{\"success\": true}";
     }
@@ -232,6 +386,32 @@ public class MessageBoardResource
     {
       e.printStackTrace();
     }
+    finally
+    {
+      if (statement != null)
+      {
+        try
+        {
+          statement.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+      if (conn != null)
+      {
+        try
+        {
+          conn.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+    }
+
     return "{\"success\": false}";
   }
 
@@ -243,12 +423,12 @@ public class MessageBoardResource
       @QueryParam("SessionSubKey") String sessionSubKey
       )
   {
+    Connection conn = null;
+    Statement statement = null;
+
     try
     {
-      Class.forName("org.h2.Driver");
-      Connection conn = DriverManager.getConnection("jdbc:h2:./test", "sa", "");
-
-      conn.close();
+      conn = getConnection();
 
       return "{\"success\": true}";
     }
@@ -260,21 +440,64 @@ public class MessageBoardResource
     {
       e.printStackTrace();
     }
+    finally
+    {
+      if (statement != null)
+      {
+        try
+        {
+          statement.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+      if (conn != null)
+      {
+        try
+        {
+          conn.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+    }
+
     return "{\"success\": false}";
   }
 
   private Job getNextJob(String sessionId)
   {
+    Connection conn = null;
+    Statement statement = null;
+
     try
     {
-      Job job = new Job();
+      conn = getConnection();
+      statement = conn.createStatement();
 
-      Class.forName("org.h2.Driver");
-      Connection conn = DriverManager.getConnection("jdbc:h2:./test", "sa", "");
+      ResultSet resultSet = statement.executeQuery(
+          String.format(
+              "select * from jobs where session_id = %s and result = null limit 1",
+              sessionId));
 
-      //
+      Job job = null;
 
-      conn.close();
+      while (resultSet.next())
+      {
+        job = new Job();
+
+        job.SessionId = resultSet.getString("session_id");
+        job.SessionSubKey = resultSet.getString("session_sub_key");
+        job.JobId = resultSet.getInt("id");
+        job.LastAccessTime = resultSet.getLong("last_access_time");
+        job.Data = resultSet.getString("data");
+        job.Result = resultSet.getString("result");
+        job.Status = resultSet.getString("status");
+      }
 
       return job;
     }
@@ -286,22 +509,46 @@ public class MessageBoardResource
     {
       e.printStackTrace();
     }
+    finally
+    {
+      if (statement != null)
+      {
+        try
+        {
+          statement.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+      if (conn != null)
+      {
+        try
+        {
+          conn.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+    }
 
     return null;
   }
 
   private List<Job> getJobList(String sessionId)
   {
+    Connection conn = null;
+    Statement statement = null;
+
     List<Job> jobList = new ArrayList<Job>();
 
     try
     {
-      Class.forName("org.h2.Driver");
-      Connection conn = DriverManager.getConnection("jdbc:h2:./test", "sa", "");
+      conn = getConnection();
 
-      //
-
-      conn.close();
 
       return jobList;
     }
@@ -312,6 +559,31 @@ public class MessageBoardResource
     catch (SQLException e)
     {
       e.printStackTrace();
+    }
+    finally
+    {
+      if (statement != null)
+      {
+        try
+        {
+          statement.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
+      if (conn != null)
+      {
+        try
+        {
+          conn.close();
+        }
+        catch (SQLException e)
+        {
+          e.printStackTrace();
+        }
+      }
     }
 
     return jobList;
