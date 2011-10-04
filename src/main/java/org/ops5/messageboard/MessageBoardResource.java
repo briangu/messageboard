@@ -20,7 +20,7 @@ import org.json.JSONObject;
 @Path("/mb/")
 public class MessageBoardResource
 {
-  private static final String _connectionString = "jdbc:h2:./test";
+  private static final String _connectionString = "jdbc:h2:./sessions";
 
   static {
     Connection conn = null;
@@ -29,7 +29,34 @@ public class MessageBoardResource
     try
     {
       conn = getConnection();
-      ResultSet resultSet = conn.getMetaData().getTables(conn.getCatalog(), null, null, null);
+      ResultSet rs = conn.getMetaData().getTables(null, null, "%", new String[] { "TABLE" });
+
+      boolean haveJobsTable = false;
+
+      while (rs.next())
+      {
+        String tableName = rs.getString("TABLE_NAME");
+        if (tableName.equals("JOBS"))
+        {
+          haveJobsTable = true;
+          break;
+        }
+      }
+
+      if (!haveJobsTable)
+      {
+        statement = conn.createStatement();
+        statement.execute(
+            "create table jobs (" +
+                "id INTEGER not NULL," +
+                "session_id VARCHAR(255)," +
+                "session_sub_key VARCHAR(255)," +
+                "last_access_time BIGINT," +
+                "data CLOB," +
+                "result CLOB," +
+                "status VARCHAR(255)" +
+            ")");
+      }
     }
     catch (ClassNotFoundException e)
     {
