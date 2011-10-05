@@ -505,10 +505,11 @@ public class MessageBoardResource
     {
       conn = getConnection();
 
-      // TODO: fix...this is a pretty hacky way to get a unique record from the table, as there's a race
+      // TODO: fix...this is a pretty hacky way to get a unique record from the table,
+      // as there's a race if the client tries to get multiple jobs at once
 
       long now = new Date().getTime();
-      statement = conn.prepareStatement("update jobs set last_access_time = ?, worker_id = ? where session_id = ? and worker_id = null and result = null limit 1");
+      statement = conn.prepareStatement("update jobs set last_access_time = ?, worker_id = ? where session_id = ? and worker_id is NULL and result is NULL limit 1");
       statement.setLong(0, now);
       statement.setString(1, workerId);
       statement.setString(2, sessionId);
@@ -516,6 +517,8 @@ public class MessageBoardResource
       statement.close();
 
       statement = conn.prepareStatement("select * from jobs where last_access_time = ? and worker_id = ?");
+      statement.setLong(0, now);
+      statement.setString(1, workerId);
       ResultSet resultSet = statement.executeQuery();
 
       Job job = null;
