@@ -202,22 +202,19 @@ public class MessageBoardResource
       )
   {
     Connection conn = null;
-    Statement statement = null;
+    PreparedStatement statement = null;
 
     try
     {
       conn = getConnection();
 
-      statement = conn.createStatement();
-
-      statement.executeUpdate(
-          String.format(
-              "update jobs set result = %s, last_access_time = %l where session_id = %s and session_sub_key = %s and id = %i",
-              result,
-              new Date().getTime(),
-              sessionId,
-              sessionSubKey,
-              jobId));
+      statement = conn.prepareStatement("update jobs set result = ?, last_access_time = ? where session_id = ? and session_sub_key = ? and id = ?");
+      statement.setString(0, result);
+      statement.setLong(1, new Date().getTime());
+      statement.setString(2, sessionId);
+      statement.setString(3, sessionSubKey);
+      statement.setString(4, jobId);
+      statement.execute();
 
       return "{\"success\": true}";
     }
@@ -264,12 +261,12 @@ public class MessageBoardResource
   public String postJobList(@FormParam("JobList") String jobsRaw)
   {
     Connection conn = null;
-    Statement statement = null;
+    PreparedStatement statement = null;
 
     try
     {
       conn = getConnection();
-      statement = conn.createStatement();
+      statement = conn.prepareStatement("insert into jobs (session_id, session_sub_key, status, last_access_time, data, result) values (?, ?, ?, ?, ?, ?)");
 
       JSONArray jobList = new JSONArray(jobsRaw);
 
@@ -277,15 +274,13 @@ public class MessageBoardResource
       {
         Job job = Job.createFrom(jobList.getJSONObject(i));
 
-        statement.addBatch(
-            String.format(
-                "insert into jobs values (%s, %s, %s, %l, %s, %s)",
-                job.SessionId,
-                job.SessionSubKey,
-                job.Status,
-                job.LastAccessTime,
-                job.Data,
-                job.Result));
+        statement.setString(0, job.SessionId);
+        statement.setString(1, job.SessionSubKey);
+        statement.setString(2, job.Status);
+        statement.setLong(3, job.LastAccessTime);
+        statement.setString(4, job.Data);
+        statement.setString(5, job.Result);
+        statement.addBatch();
       }
 
       statement.executeBatch();
@@ -505,11 +500,14 @@ public class MessageBoardResource
     try
     {
       conn = getConnection();
+
+      conn.prepareStatement("update jobs set last_access_time = ?, status = 'working' output INSERTED.id where session_id = %s and result = null limit 1");
+
       statement = conn.createStatement();
 
       ResultSet resultSet = statement.executeQuery(
           String.format(
-              "select * from jobs where session_id = %s and result = null limit 1",
+              "update jobs set last_access_time = %l, status = 'working' output INSERTED.id where session_id = %s and result = null limit 1",
               sessionId));
 
       Job job = null;
