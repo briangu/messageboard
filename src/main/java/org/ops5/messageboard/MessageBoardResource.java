@@ -11,6 +11,7 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.xml.transform.Result;
 import org.json.JSONArray;
 import org.json.JSONException;
 import java.sql.*;
@@ -504,10 +505,17 @@ public class MessageBoardResource
     {
       conn = getConnection();
 
+      // TODO: fix...this is a pretty hacky way to get a unique record from the table, as there's a race
+
+      long now = new Date().getTime();
       statement = conn.prepareStatement("update jobs set last_access_time = ?, worker_id = ? where session_id = ? and worker_id = null and result = null limit 1");
-      statement.setLong(0, new Date().getTime());
-      statement.setString(2, workerId);
-      statement.setString(3, sessionId);
+      statement.setLong(0, now);
+      statement.setString(1, workerId);
+      statement.setString(2, sessionId);
+      statement.executeUpdate();
+      statement.close();
+
+      statement = conn.prepareStatement("select * from jobs where last_access_time = ? and worker_id = ?");
       ResultSet resultSet = statement.executeQuery();
 
       Job job = null;
